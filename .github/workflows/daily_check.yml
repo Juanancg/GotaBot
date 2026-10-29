@@ -1,0 +1,60 @@
+name: 💧 GotaBot - Control Diario de Agua y Despliegue Web
+
+on:
+  # Ejecución automática todos los días a las 08:00 UTC (09:00 / 10:00 hora de Madrid)
+  schedule:
+    - cron: '0 8 * * *'
+  # Permite lanzarlo manualmente desde la pestaña "Actions" de GitHub
+  workflow_dispatch:
+    inputs:
+      notify_mode:
+        description: 'Modo de notificación (--notify-always envía siempre; --notify solo si hay exceso)'
+        required: false
+        default: '--notify-always'
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: 'pages'
+  cancel-in-progress: false
+
+jobs:
+  check-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Ejecutar GotaBot, exportar Web y notificar por Telegram
+        env:
+          EMI_USERNAME: ${{ secrets.EMI_USERNAME }}
+          EMI_PASSWORD: ${{ secrets.EMI_PASSWORD }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          ALERT_THRESHOLD_LITERS: ${{ secrets.ALERT_THRESHOLD_LITERS || '1000' }}
+          ALERT_MULTIPLIER_MEAN: ${{ secrets.ALERT_MULTIPLIER_MEAN || '2.0' }}
+          DASHBOARD_PIN: ${{ secrets.DASHBOARD_PIN || '1234' }}
+          DASHBOARD_URL: ${{ secrets.DASHBOARD_URL || 'https://juanancg.github.io/GotaBot/' }}
+        run: |
+          MODE="${{ github.event.inputs.notify_mode || '--notify-always' }}"
+          python main.py --days 30 --export-web $MODE
+
+      - name: Configurar GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Subir artefacto de GitHub Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'docs/'
+
+      - name: Desplegar a GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

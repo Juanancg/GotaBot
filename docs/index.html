@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>GotaBot 💧 Dashboard de Agua</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .glass-card {
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(226, 232, 240, 0.8);
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen pb-12 selection:bg-cyan-500 selection:text-white">
+
+  <!-- PANTALLA DE BLOQUEO POR PIN -->
+  <div id="lockScreen" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/90 backdrop-blur-md p-4 transition-opacity duration-300">
+    <div class="glass-card max-w-sm w-full p-6 rounded-3xl shadow-2xl text-center border-slate-700/50 bg-slate-800/90 text-white">
+      <div class="w-16 h-16 bg-cyan-500/20 text-cyan-400 rounded-2xl flex items-center justify-center mx-auto mb-4 text-3xl shadow-inner">
+        🔒
+      </div>
+      <h2 class="text-xl font-bold mb-1">Acceso a GotaBot</h2>
+      <p class="text-sm text-slate-400 mb-6">Introduce el PIN familiar para ver las lecturas del contador.</p>
+      
+      <div class="flex justify-center gap-3 mb-6">
+        <input type="password" maxlength="1" class="pin-digit w-12 h-14 text-center text-2xl font-bold bg-slate-700/80 border border-slate-600 rounded-xl focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-400/20" inputmode="numeric">
+        <input type="password" maxlength="1" class="pin-digit w-12 h-14 text-center text-2xl font-bold bg-slate-700/80 border border-slate-600 rounded-xl focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-400/20" inputmode="numeric">
+        <input type="password" maxlength="1" class="pin-digit w-12 h-14 text-center text-2xl font-bold bg-slate-700/80 border border-slate-600 rounded-xl focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-400/20" inputmode="numeric">
+        <input type="password" maxlength="1" class="pin-digit w-12 h-14 text-center text-2xl font-bold bg-slate-700/80 border border-slate-600 rounded-xl focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-400/20" inputmode="numeric">
+      </div>
+      
+      <p id="pinError" class="text-xs text-rose-400 mb-4 hidden font-medium">⚠️ PIN incorrecto. Inténtalo de nuevo.</p>
+
+      <button id="btnUnlock" class="w-full py-3.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold rounded-2xl transition-all shadow-lg shadow-cyan-500/25 active:scale-98">
+        Entrar al Dashboard
+      </button>
+    </div>
+  </div>
+
+  <!-- DASHBOARD PRINCIPAL -->
+  <main id="appContent" class="max-w-xl mx-auto px-4 pt-6 filter blur-sm transition-all duration-300">
+    
+    <!-- HEADER -->
+    <header class="flex items-center justify-between mb-6">
+      <div class="flex items-center gap-3">
+        <div class="w-11 h-11 bg-gradient-to-tr from-cyan-500 to-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-cyan-500/30 text-xl font-bold">
+          💧
+        </div>
+        <div>
+          <h1 class="text-xl font-extrabold tracking-tight text-slate-900">GotaBot</h1>
+          <p id="subHeader" class="text-xs text-slate-500 font-medium">Cargando datos...</p>
+        </div>
+      </div>
+      <div id="badgeStatus" class="px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80 flex items-center gap-1.5 shadow-sm">
+        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+        <span>Normal</span>
+      </div>
+    </header>
+
+    <!-- TARJETA PRINCIPAL (HERO STAT) -->
+    <section class="glass-card rounded-3xl p-6 shadow-sm mb-5 relative overflow-hidden">
+      <div class="absolute -right-6 -bottom-6 w-32 h-32 bg-cyan-100 rounded-full blur-2xl pointer-events-none opacity-60"></div>
+      
+      <div class="flex justify-between items-start mb-2">
+        <span class="text-xs font-bold uppercase tracking-wider text-slate-600">Consumo de ayer</span>
+        <span id="heroDate" class="text-xs font-medium text-slate-600">--</span>
+      </div>
+
+      <div class="flex items-baseline gap-2 mb-3">
+        <span id="heroLiters" class="text-5xl font-extrabold tracking-tight text-slate-900">--</span>
+        <span class="text-xl font-semibold text-slate-600">Litros</span>
+        <span id="heroM3" class="text-sm text-slate-600 font-medium ml-1">(-- m³)</span>
+      </div>
+
+      <div id="heroAlertBanner" class="hidden p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium mb-3 flex items-start gap-2">
+        <span class="text-base leading-none">🚨</span>
+        <div id="heroAlertText">Consumo superior al umbral configurado.</div>
+      </div>
+
+      <div class="grid grid-cols-3 gap-2 pt-3 border-t border-slate-100 text-center">
+        <div class="p-2 rounded-xl bg-slate-50/80">
+          <div class="text-[10px] font-semibold text-slate-600 uppercase">Lectura Contador</div>
+          <div id="statTotalReading" class="text-xs font-bold text-slate-800 mt-0.5">-- m³</div>
+        </div>
+        <div class="p-2 rounded-xl bg-slate-50/80">
+          <div class="text-[10px] font-semibold text-slate-600 uppercase">Habitual (Mediana)</div>
+          <div id="statMedian" class="text-xs font-bold text-slate-800 mt-0.5">-- L/d</div>
+        </div>
+        <div class="p-2 rounded-xl bg-slate-50/80">
+          <div class="text-[10px] font-semibold text-slate-600 uppercase">Umbral Alerta</div>
+          <div id="statThreshold" class="text-xs font-bold text-slate-800 mt-0.5">-- L/d</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- GRÁFICA DE CONSUMO -->
+    <section class="glass-card rounded-3xl p-5 shadow-sm mb-5">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2 class="text-sm font-bold text-slate-900">Evolución de Consumo</h2>
+          <p class="text-xs text-slate-600">Litros consumidos por día</p>
+        </div>
+        <!-- Selector de rango -->
+        <div class="flex bg-slate-100 p-1 rounded-xl text-xs font-semibold text-slate-600">
+          <button id="btnRange7" class="px-2.5 py-1 rounded-lg transition-all" onclick="setChartRange(7)">7d</button>
+          <button id="btnRange15" class="px-2.5 py-1 rounded-lg transition-all bg-white text-slate-900 shadow-xs" onclick="setChartRange(15)">15d</button>
+          <button id="btnRange30" class="px-2.5 py-1 rounded-lg transition-all" onclick="setChartRange(30)">30d</button>
+        </div>
+      </div>
+
+      <div class="h-64 w-full">
+        <canvas id="consumptionChart"></canvas>
+      </div>
+
+      <div class="flex items-center justify-center gap-4 mt-3 text-[11px] text-slate-600 font-medium">
+        <div class="flex items-center gap-1.5">
+          <span class="w-2.5 h-2.5 rounded-sm bg-cyan-500"></span>
+          <span>Normal</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <span class="w-2.5 h-2.5 rounded-sm bg-rose-500"></span>
+          <span>Excesivo (> Umbral)</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <span class="w-3 h-0.5 bg-rose-400 border-t border-dashed"></span>
+          <span>Límite</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- DETALLE DEL HISTORIAL (TABLA DESPLEGABLE) -->
+    <section class="glass-card rounded-3xl p-5 shadow-sm">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-sm font-bold text-slate-900">Últimos Registros</h2>
+        <span id="readingsCount" class="text-xs font-semibold text-slate-600">-- días</span>
+      </div>
+
+      <div class="divide-y divide-slate-100 text-xs" id="readingsList">
+        <!-- Render dinámico aquí -->
+      </div>
+    </section>
+
+    <!-- FOOTER INFORMACIÓN -->
+    <footer class="mt-8 text-center text-[11px] text-slate-600">
+      <p id="footerMeta">GotaBot • Telelectura EMI Telegestión</p>
+      <p class="mt-1">Actualizado automáticamente cada mañana vía GitHub Actions</p>
+    </footer>
+
+  </main>
+
+  <script>
+    let globalData = null;
+    let chartInstance = null;
+    let activeDays = 15;
+
+    // Control del PIN
+    const PIN_KEY = "gotabot_auth_pin";
+    
+    function initSecurity() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlKey = urlParams.get('key');
+      const savedPin = localStorage.getItem(PIN_KEY);
+
+      fetch('data.json')
+        .then(res => {
+          if (!res.ok) throw new Error("No se pudo cargar data.json");
+          return res.json();
+        })
+        .then(data => {
+          globalData = data;
+          const expectedPin = String(data.security?.pin || "1234");
+
+          if (urlKey && urlKey === expectedPin) {
+            localStorage.setItem(PIN_KEY, expectedPin);
+            unlockDashboard();
+            return;
+          }
+
+          if (savedPin === expectedPin) {
+            unlockDashboard();
+            return;
+          }
+
+          setupPinInputs(expectedPin);
+        })
+        .catch(err => {
+          console.error(err);
+          document.getElementById('subHeader').innerText = "Error cargando datos";
+        });
+    }
+
+    function setupPinInputs(expectedPin) {
+      const inputs = document.querySelectorAll('.pin-digit');
+      inputs.forEach((input, idx) => {
+        input.addEventListener('input', (e) => {
+          if (e.target.value.length > 0 && idx < inputs.length - 1) {
+            inputs[idx + 1].focus();
+          }
+        });
+        input.addEventListener('keydown', (e) => {
+          if (e.key === 'Backspace' && e.target.value === '' && idx > 0) {
+            inputs[idx - 1].focus();
+          }
+        });
+      });
+
+      document.getElementById('btnUnlock').addEventListener('click', () => {
+        let enteredPin = "";
+        inputs.forEach(i => enteredPin += i.value);
+        if (enteredPin === expectedPin) {
+          localStorage.setItem(PIN_KEY, expectedPin);
+          unlockDashboard();
+        } else {
+          document.getElementById('pinError').classList.remove('hidden');
+          inputs.forEach(i => i.value = '');
+          inputs[0].focus();
+        }
+      });
+    }
+
+    function unlockDashboard() {
+      const lock = document.getElementById('lockScreen');
+      const content = document.getElementById('appContent');
+      lock.classList.add('opacity-0', 'pointer-events-none');
+      content.classList.remove('blur-sm');
+      setTimeout(() => lock.remove(), 300);
+
+      renderDashboard(globalData);
+    }
+
+    function renderDashboard(data) {
+      if (!data) return;
+
+      const summary = data.summary;
+      const building = data.building;
+
+      document.getElementById('subHeader').innerText = `${building.address} • #${building.meter_serial}`;
+      document.getElementById('heroDate').innerText = summary.latest_date;
+      document.getElementById('heroLiters').innerText = Math.round(summary.latest_daily_liters).toLocaleString();
+      document.getElementById('heroM3').innerText = `(${summary.latest_daily_m3.toFixed(3)} m³)`;
+
+      document.getElementById('statTotalReading').innerText = `${summary.latest_meter_m3.toFixed(3)} m³`;
+      document.getElementById('statMedian').innerText = `${Math.round(summary.median_daily_liters)} L/d`;
+      document.getElementById('statThreshold').innerText = `${Math.round(summary.threshold_liters)} L/d`;
+
+      // Badge de estado
+      const badge = document.getElementById('badgeStatus');
+      const heroAlert = document.getElementById('heroAlertBanner');
+      if (summary.is_latest_excessive) {
+        badge.className = "px-3 py-1.5 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200/80 flex items-center gap-1.5 shadow-sm";
+        badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span><span>Alerta Fuga</span>`;
+
+        heroAlert.classList.remove('hidden');
+        document.getElementById('heroAlertText').innerText = summary.latest_alerts.join(". ") || "Consumo excesivo detectado.";
+      } else {
+        badge.className = "px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80 flex items-center gap-1.5 shadow-sm";
+        badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span><span>Normal</span>`;
+        heroAlert.classList.add('hidden');
+      }
+
+      setChartRange(activeDays);
+      renderTable(data.daily_readings);
+    }
+
+    function setChartRange(days) {
+      activeDays = days;
+      ['btnRange7', 'btnRange15', 'btnRange30'].forEach(id => {
+        const btn = document.getElementById(id);
+        btn.className = "px-2.5 py-1 rounded-lg transition-all text-slate-500";
+      });
+      const activeBtn = document.getElementById(`btnRange${days}`);
+      if (activeBtn) {
+        activeBtn.className = "px-2.5 py-1 rounded-lg transition-all bg-white text-slate-900 shadow-xs";
+      }
+
+      if (!globalData) return;
+      const readings = globalData.daily_readings.slice(-days);
+      const labels = readings.map(r => {
+        const parts = r.date.split('-');
+        return `${parts[2]}/${parts[1]}`;
+      });
+      const values = readings.map(r => r.daily_liters);
+      const threshold = globalData.summary.threshold_liters;
+
+      const colors = values.map(v => v > threshold ? 'rgba(244, 63, 94, 0.9)' : 'rgba(6, 182, 212, 0.9)');
+      const borderColors = values.map(v => v > threshold ? '#e11d48' : '#0891b2');
+
+      const ctx = document.getElementById('consumptionChart').getContext('2d');
+      if (chartInstance) chartInstance.destroy();
+
+      chartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Litros',
+            data: values,
+            backgroundColor: colors,
+            borderColor: borderColors,
+            borderWidth: 1,
+            borderRadius: 6,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => `${ctx.raw.toLocaleString()} L (${(ctx.raw/1000).toFixed(3)} m³)`
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              grid: { color: 'rgba(241, 245, 249, 1)' },
+              ticks: { font: { family: "'Plus Jakarta Sans'", size: 10 } }
+            },
+            x: {
+              grid: { display: false },
+              ticks: { font: { family: "'Plus Jakarta Sans'", size: 10 } }
+            }
+          }
+        }
+      });
+    }
+
+    function renderTable(readings) {
+      const container = document.getElementById('readingsList');
+      container.innerHTML = '';
+      document.getElementById('readingsCount').innerText = `${readings.length} días`;
+
+      const reversed = [...readings].reverse();
+      const threshold = globalData.summary.threshold_liters;
+
+      reversed.forEach(r => {
+        const isExcess = r.daily_liters > threshold;
+        const row = document.createElement('div');
+        row.className = "py-2.5 flex items-center justify-between";
+        row.innerHTML = `
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full ${isExcess ? 'bg-rose-500' : 'bg-cyan-500'}"></span>
+            <div>
+              <div class="font-semibold text-slate-800">${r.date} ${r.days_elapsed > 1 ? `<span class="text-[10px] text-slate-400">(${r.days_elapsed}d)</span>` : ''}</div>
+              <div class="text-[10px] text-slate-400">Contador: ${r.meter_value_m3.toFixed(3)} m³</div>
+            </div>
+          </div>
+          <div class="text-right">
+            <div class="font-bold ${isExcess ? 'text-rose-600' : 'text-slate-900'}">${Math.round(r.daily_liters).toLocaleString()} L</div>
+            <div class="text-[10px] text-slate-400">${r.daily_m3.toFixed(3)} m³</div>
+          </div>
+        `;
+        container.appendChild(row);
+      });
+    }
+
+    window.addEventListener('DOMContentLoaded', initSecurity);
+  </script>
+</body>
+</html>
