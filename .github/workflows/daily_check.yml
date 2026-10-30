@@ -4,7 +4,7 @@ on:
   # Ejecución automática diaria (08:20 UTC = 09:20 hora peninsular)
   # Usamos un minuto impar (:20) porque los minutos en punto (:00) suelen sufrir retrasos por saturación en GitHub
   schedule:
-    - cron: '30 10 * * *'
+    - cron: '15 11 * * *'
   # Permite lanzarlo manualmente desde la pestaña "Actions" de GitHub
   workflow_dispatch:
     inputs:
