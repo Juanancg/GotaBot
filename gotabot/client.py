@@ -180,15 +180,17 @@ class EmiClient:
 
         readings: List[MeterReading] = []
         for idx in range(1, len(recent_points)):
-            date_str, curr = recent_points[idx]
-            _, prev = recent_points[idx - 1]
+            curr_date_str, curr = recent_points[idx]
+            prev_date_str, prev = recent_points[idx - 1]
             daily_m3 = round(curr["meter_value_m3"] - prev["meter_value_m3"], 3)
             daily_liters = round(daily_m3 * 1000.0, 1)
             days_elapsed = max(1, round((curr["timestamp"] - prev["timestamp"]) / 86400))
+            # La lectura acumulada 'curr' se toma a las 00:00:00 al finalizar el día 'prev_date_str'.
+            # Por tanto, el consumo corresponde exactamente al día 'prev_date_str'.
             readings.append(
                 MeterReading(
-                    date=date_str,
-                    timestamp=curr["timestamp"],
+                    date=prev_date_str,
+                    timestamp=prev["timestamp"],
                     meter_value_m3=round(curr["meter_value_m3"], 3),
                     daily_m3=daily_m3,
                     daily_liters=daily_liters,
