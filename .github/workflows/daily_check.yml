@@ -1,9 +1,10 @@
 name: 💧 GotaBot - Control Diario de Agua y Despliegue Web
 
 on:
-  # Ejecución automática todos los días a las 08:00 UTC (09:00 / 10:00 hora de Madrid)
+  # Ejecución automática diaria (08:20 UTC = 09:20 hora peninsular)
+  # Usamos un minuto impar (:20) porque los minutos en punto (:00) suelen sufrir retrasos por saturación en GitHub
   schedule:
-    - cron: '0 8 * * *'
+    - cron: '20 8 * * *'
   # Permite lanzarlo manualmente desde la pestaña "Actions" de GitHub
   workflow_dispatch:
     inputs:
@@ -44,7 +45,10 @@ jobs:
           DASHBOARD_PIN: ${{ secrets.DASHBOARD_PIN || '1234' }}
           DASHBOARD_URL: ${{ secrets.DASHBOARD_URL || 'https://juanancg.github.io/GotaBot/' }}
         run: |
-          MODE="${{ github.event.inputs.notify_mode || '--notify-always' }}"
+          MODE="${{ github.event.inputs.notify_mode }}"
+          if [ -z "$MODE" ]; then
+            MODE="--notify-always"
+          fi
           python main.py --days 30 --export-web $MODE
 
       - name: Configurar GitHub Pages
