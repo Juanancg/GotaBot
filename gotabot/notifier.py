@@ -12,8 +12,8 @@ from .analyzer import AnalysisReport
 
 def format_report_message(
     report: AnalysisReport,
-    user_name: str,
-    address_str: str,
+    user_name: str = "",
+    address_str: str = "",
     dashboard_url: Optional[str] = None,
     dashboard_pin: Optional[str] = None,
 ) -> str:
@@ -22,10 +22,6 @@ def format_report_message(
     lines = [
         f"💧 *GotaBot - Monitor de Agua*",
         f"{status_emoji}",
-        f"",
-        f"👤 *Titular:* {user_name}",
-        f"🏠 *Vivienda:* {address_str}",
-        f"🔢 *Contador:* `{report.latest.serial_number}`",
         f"",
         f"📅 *Última lectura ({report.latest.date}):*",
         f"• Lectura contador: *{report.latest.meter_value_m3:.3f} m³*",

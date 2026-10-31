@@ -1,10 +1,9 @@
 name: 💧 GotaBot - Control Diario de Agua y Despliegue Web
 
 on:
-  # Ejecución automática diaria (08:20 UTC = 09:20 hora peninsular)
-  # Usamos un minuto impar (:20) porque los minutos en punto (:00) suelen sufrir retrasos por saturación en GitHub
+  # Ejecución periódica para detectar la lectura diaria en cuanto EMI la publique
+  # Se ejecuta cada 15 minutos, pero solo enviará 1 notificación al día gracias a la protección contra duplicados
   schedule:
-    # - cron: '15 11 * * *'
     - cron: '*/15 * * * *'
   # Permite lanzarlo manualmente desde la pestaña "Actions" de GitHub
   workflow_dispatch:
@@ -13,6 +12,10 @@ on:
         description: 'Modo de notificación (--notify-always envía siempre; --notify solo si hay exceso)'
         required: false
         default: '--notify-always'
+      force_notify:
+        description: 'Forzar envío aunque ya se haya notificado hoy'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -29,6 +32,14 @@ jobs:
     steps:
       - name: Descargar repositorio
         uses: actions/checkout@v4
+
+      - name: Restaurar caché de datos y notificaciones
+        uses: actions/cache/restore@v4
+        with:
+          path: data/
+          key: gotabot-data-${{ github.run_id }}
+          restore-keys: |
+            gotabot-data-
 
       - name: Configurar Python
         uses: actions/setup-python@v5
@@ -50,7 +61,18 @@ jobs:
           if [ -z "$MODE" ]; then
             MODE="--notify-always"
           fi
-          python main.py --days 30 --export-web $MODE
+          FORCE=""
+          if [ "${{ github.event.inputs.force_notify }}" = "true" ]; then
+            FORCE="--force-notify"
+          fi
+          python main.py --days 30 --export-web $MODE $FORCE
+
+      - name: Guardar caché de datos y notificaciones
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: data/
+          key: gotabot-data-${{ github.run_id }}
 
       - name: Configurar GitHub Pages
         uses: actions/configure-pages@v5

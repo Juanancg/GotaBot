@@ -10,6 +10,7 @@ import argparse
 import json
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Dict
 
@@ -118,6 +119,11 @@ def main() -> int:
         "--notify-always",
         action="store_true",
         help="Enviar notificación siempre (incluso si no hay exceso de consumo en el último día)",
+    )
+    parser.add_argument(
+        "--force-notify",
+        action="store_true",
+        help="Forzar el envío de notificación ignorando la protección de envío único diario",
     )
     parser.add_argument(
         "--no-cache",
@@ -323,33 +329,84 @@ def main() -> int:
 
     should_send = args.notify_always or (args.notify and report.is_latest_excessive)
     if should_send:
-        tg_token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
-        tg_chat = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
-        if tg_token and tg_chat:
-            print("\n📲 Enviando notificación a Telegram...")
-            ok = send_telegram_message(tg_token, tg_chat, msg_text)
-            print("✅ Telegram enviado correctamente." if ok else "❌ Falló el envío a Telegram.")
+        # Control de duplicados: evitar enviar más de una notificación al día o repetir la misma lectura
+        state_file = base_dir / "data" / "last_notification.json"
+        already_sent = False
+        last_state = {}
 
-        smtp_user = os.environ.get("SMTP_USER", "").strip()
-        smtp_pass = os.environ.get("SMTP_PASSWORD", "").strip()
-        email_to = os.environ.get("EMAIL_TO", "").strip()
-        if smtp_user and smtp_pass and email_to:
-            print("\n📧 Enviando notificación por Email...")
-            subject = (
-                f"🚨 ALERTA GotaBot: Consumo excesivo ({report.latest.daily_liters:.1f} L)"
-                if report.is_latest_excessive
-                else f"💧 GotaBot: Resumen de consumo ({report.latest.daily_liters:.1f} L)"
+        try:
+            import zoneinfo
+            today_str = datetime.now(zoneinfo.ZoneInfo("Europe/Madrid")).strftime("%Y-%m-%d")
+        except Exception:
+            today_str = datetime.now().strftime("%Y-%m-%d")
+
+        if state_file.exists():
+            try:
+                last_state = json.loads(state_file.read_text(encoding="utf-8"))
+            except Exception:
+                last_state = {}
+
+        last_sent_date = last_state.get("last_sent_date")
+        last_reading_date = last_state.get("last_reading_date")
+
+        if not args.force_notify and (last_sent_date == today_str or last_reading_date == report.latest.date):
+            already_sent = True
+            reason = (
+                f"ya se envió notificación hoy ({last_sent_date})"
+                if last_sent_date == today_str
+                else f"la lectura del {report.latest.date} ya fue notificada previamente"
             )
-            send_email_notification(
-                smtp_host=os.environ.get("SMTP_HOST", "smtp.gmail.com"),
-                smtp_port=int(os.environ.get("SMTP_PORT", "587")),
-                smtp_user=smtp_user,
-                smtp_password=smtp_pass,
-                email_to=email_to,
-                subject=subject,
-                body=msg_text,
-            )
-            print("✅ Email enviado correctamente.")
+            print(f"\nℹ️ Notificación omitida (skip): {reason}. Usa --force-notify si deseas forzar el reenvío.")
+
+        if not already_sent:
+            tg_token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+            tg_chat = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+            sent_any = False
+
+            if tg_token and tg_chat:
+                print("\n📲 Enviando notificación a Telegram...")
+                ok = send_telegram_message(tg_token, tg_chat, msg_text)
+                if ok:
+                    print("✅ Telegram enviado correctamente.")
+                    sent_any = True
+                else:
+                    print("❌ Falló el envío a Telegram.")
+
+            smtp_user = os.environ.get("SMTP_USER", "").strip()
+            smtp_pass = os.environ.get("SMTP_PASSWORD", "").strip()
+            email_to = os.environ.get("EMAIL_TO", "").strip()
+            if smtp_user and smtp_pass and email_to:
+                print("\n📧 Enviando notificación por Email...")
+                subject = (
+                    f"🚨 ALERTA GotaBot: Consumo excesivo ({report.latest.daily_liters:.1f} L)"
+                    if report.is_latest_excessive
+                    else f"💧 GotaBot: Resumen de consumo ({report.latest.daily_liters:.1f} L)"
+                )
+                email_ok = send_email_notification(
+                    smtp_host=os.environ.get("SMTP_HOST", "smtp.gmail.com"),
+                    smtp_port=int(os.environ.get("SMTP_PORT", "587")),
+                    smtp_user=smtp_user,
+                    smtp_password=smtp_pass,
+                    email_to=email_to,
+                    subject=subject,
+                    body=msg_text,
+                )
+                if email_ok:
+                    print("✅ Email enviado correctamente.")
+                    sent_any = True
+
+            if sent_any:
+                new_state = {
+                    "last_sent_date": today_str,
+                    "last_reading_date": report.latest.date,
+                    "latest_meter_m3": report.latest.meter_value_m3,
+                    "sent_at": datetime.now().isoformat(),
+                }
+                state_file.parent.mkdir(parents=True, exist_ok=True)
+                state_file.write_text(
+                    json.dumps(new_state, indent=2, ensure_ascii=False),
+                    encoding="utf-8",
+                )
 
     return 0
 
